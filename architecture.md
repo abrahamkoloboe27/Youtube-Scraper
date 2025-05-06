@@ -49,4 +49,4 @@ graph TD
 
 ```
 
-This diagram illustrates the main interactions between the extraction, storage, and synchronization components, using clear English labels and grouping for better readability and international documentation.
+This diagram illustrates the main interactions between the extraction, storage, and synchronization components.
