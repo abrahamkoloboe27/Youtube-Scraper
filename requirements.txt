@@ -1,0 +1,11 @@
+python-dotenv
+requests
+tqdm
+playwright
+isodate
+google-api-python-client
+pymongo
+azure-storage-blob
+minio
+concurrent-log-handler
+yt-dlp
