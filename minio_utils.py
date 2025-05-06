@@ -1,3 +1,17 @@
+"""
+Utilitaires MinIO pour le projet Youtube-Fon-Scrapping.
+
+Ce module fournit des fonctions pour :
+- Vérifier la disponibilité du service MinIO
+- Uploader des fichiers audio dans le bucket MinIO
+- Vérifier la présence d'un fichier dans MinIO et supprimer le fichier local si besoin
+
+Variables d'environnement utilisées :
+- MINIO_ENDPOINT : Adresse du service MinIO
+- MINIO_ACCESS_KEY : Clé d'accès MinIO
+- MINIO_SECRET_KEY : Clé secrète MinIO
+- MINIO_BUCKET : Nom du bucket MinIO
+"""
 import os
 from minio import Minio
 from minio.error import S3Error
@@ -19,7 +33,13 @@ client = Minio(
 )
 
 def minio_est_disponible(timeout=3):
-    """Vérifie si le service MinIO est disponible."""
+    """
+    Vérifie si le service MinIO est disponible.
+    Args:
+        timeout (int): Durée maximale d'attente en secondes pour la connexion.
+    Returns:
+        bool: True si MinIO est accessible, False sinon.
+    """
     try:
         host, port = MINIO_ENDPOINT.split(":")
         with socket.create_connection((host, int(port)), timeout=timeout):
@@ -30,7 +50,14 @@ def minio_est_disponible(timeout=3):
 
 
 def upload_audio(file_path, object_name=None):
-    """Upload un fichier audio dans le bucket Minio."""
+    """
+    Upload un fichier audio dans le bucket MinIO.
+    Args:
+        file_path (str): Chemin local du fichier à uploader.
+        object_name (str, optionnel): Nom de l'objet dans MinIO. Si None, utilise le nom du fichier.
+    Returns:
+        str ou bool: Nom de l'objet uploadé ou False en cas d'échec.
+    """
     if not minio_est_disponible():
         print("Erreur: Impossible de se connecter à MinIO. Vérifiez que le service est démarré et accessible.")
         #return False
@@ -50,7 +77,14 @@ def upload_audio(file_path, object_name=None):
         return False
 
 def verify_and_cleanup(file_path, object_name):
-    """Vérifie la présence dans MinIO et supprime le fichier local"""
+    """
+    Vérifie la présence du fichier dans MinIO et supprime le fichier local si l'upload a réussi.
+    Args:
+        file_path (str): Chemin local du fichier à supprimer.
+        object_name (str): Nom de l'objet dans MinIO à vérifier.
+    Returns:
+        bool: True si le fichier a été trouvé dans MinIO et supprimé localement, False sinon.
+    """
     try:
         client.stat_object(MINIO_BUCKET, object_name)
         os.remove(file_path)

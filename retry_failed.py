@@ -1,3 +1,16 @@
+"""
+Gestionnaire de retry pour les téléchargements échoués dans Youtube-Fon-Scrapping.
+
+Ce script autonome permet de :
+- Récupérer les entrées ayant échoué dans MongoDB
+- Relancer automatiquement le téléchargement de l'audio pour ces vidéos
+- Mettre à jour le statut et le nombre de tentatives dans MongoDB
+
+Variables d'environnement utilisées :
+- MONGO_URI : URI de connexion MongoDB
+- MONGO_DB : Nom de la base de données
+- MONGO_COLLECTION : Nom de la collection des logs
+"""
 import os
 import time
 from dotenv import load_dotenv
@@ -24,10 +37,13 @@ client = MongoClient(MONGO_URI)
 db = client[MONGO_DB]
 collection = db[MONGO_COLLECTION]
 
-
 def retry_failed_downloads():
     """
-    Récupère les échecs de téléchargement depuis MongoDB et relance le processus
+    Récupère les échecs de téléchargement depuis MongoDB et relance le processus.
+    Parcourt les entrées ayant le statut 'failed', tente un nouveau téléchargement,
+    puis met à jour le statut et le nombre de tentatives dans la base.
+    Returns:
+        None
     """
     failed_entries = collection.find({
         "status": "failed",
@@ -58,7 +74,7 @@ def retry_failed_downloads():
         if result["status"] == "success":
             logger.info(f"Réussite du réessai pour {video_info['video_id']}")
         else:
-            logger.info(f"Échec du réessai pour {video_info['video_id']}")
+            logger.warning(f"Nouvel échec pour {video_info['video_id']}")
 
 
 if __name__ == "__main__":

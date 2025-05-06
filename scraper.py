@@ -1,3 +1,13 @@
+"""
+Script principal pour le scraping de vidéos YouTube, l'extraction audio, l'insertion des logs et métadonnées dans MongoDB, et l'upload des fichiers audio sur MinIO.
+
+Fonctionnement général :
+- Récupère les playlists à traiter depuis un fichier texte.
+- Pour chaque vidéo, vérifie si elle existe déjà dans MongoDB et MinIO.
+- Si besoin, télécharge l'audio via SaveTube ou yt-dlp, puis l'upload sur MinIO.
+- Insère les logs et métadonnées dans MongoDB.
+- Supporte le téléchargement massif et le multithreading.
+"""
 import os
 import csv
 import random
@@ -36,6 +46,10 @@ USER_AGENTS = [
 def extraire_playlist_id(url_ou_id):
     """
     Extrait l'identifiant de playlist à partir d'une URL complète ou retourne l'ID si déjà fourni.
+    Args:
+        - url_ou_id: str, URL complète de la playlist ou ID brut
+    Returns:
+        - str: Identifiant de la playlist
     """
     # Si la ligne ressemble déjà à un ID (pas d'URL), retourne tel quel
     if url_ou_id.startswith("PL") and "http" not in url_ou_id:
@@ -69,10 +83,25 @@ logging.basicConfig(
 logger = logging.getLogger()
 
 def nettoyer_nom_fichier(titre):
+    """
+    Nettoie le titre pour générer un nom de fichier valide et court.
+    Args:
+        - titre: str, titre original de la vidéo
+    Returns:
+        - str: nom de fichier nettoyé et tronqué
+    """
     titre = re.sub(r'[\\/*?:"<>|]', "", titre)
     return titre.strip()[:150]
 
 def telecharger_fichier(url, nom_fichier):
+    """
+    Télécharge un fichier depuis une URL et l'enregistre localement avec une barre de progression.
+    Args:
+        - url: str, URL du fichier à télécharger
+        - nom_fichier: str, chemin de sauvegarde local
+    Returns:
+        - bool: True si le téléchargement a réussi, False sinon
+    """
     try:
         with requests.get(url, stream=True, timeout=30) as r:
             r.raise_for_status()
@@ -95,13 +124,26 @@ def telecharger_fichier(url, nom_fichier):
         return False
 
 def audio_exists_in_minio(object_name):
+    """
+    Vérifie si un fichier audio existe déjà dans le bucket MinIO.
+    Args:
+        - object_name: str, nom de l'objet à vérifier dans MinIO
+    Returns:
+        - bool: True si l'objet existe, False sinon
+    """
     try:
         return minio_client.stat_object(MINIO_BUCKET, object_name) is not None
     except Exception:
         return False
 
 def telecharger_avec_ytdlp(video_info):
-    """Méthode de secours utilisant yt-dlp pour contourner les limitations de SaveTube"""
+    """
+    Méthode de secours utilisant yt-dlp pour télécharger l'audio d'une vidéo YouTube si SaveTube échoue.
+    Args:
+        - video_info: dict, informations sur la vidéo (video_id, url, etc.)
+    Returns:
+        - dict: informations de la vidéo enrichies avec le statut et le chemin audio
+    """
     video_id = video_info['video_id']
     try:
         subprocess.run([
@@ -135,6 +177,13 @@ def telecharger_avec_ytdlp(video_info):
 
 
 def telecharger_video_savetube(video_info):
+    """
+    Télécharge l'audio d'une vidéo YouTube via SaveTube (ou yt-dlp en secours), gère l'upload MinIO et l'insertion des métadonnées.
+    Args:
+        - video_info: dict, informations sur la vidéo (video_id, url, title, duration, etc.)
+    Returns:
+        - dict: informations de la vidéo enrichies avec le statut, le chemin audio et autres métadonnées
+    """
     video_id = video_info['video_id']
     url_video = video_info['url']
     mp3_path = os.path.join(AUDIO_DIR, f"{video_id}.mp3")
@@ -296,6 +345,14 @@ def telecharger_video_savetube(video_info):
     return video_info
 
 def get_video_details(youtube, video_id):
+    """
+    Récupère les détails d'une vidéo YouTube (titre, durée, présence de sous-titres).
+    Args:
+        - youtube: objet API YouTube
+        - video_id: str, identifiant de la vidéo
+    Returns:
+        - tuple: (titre, durée en minutes, présence de sous-titres 'yes'/'no') ou None si échec
+    """
     try:
         response = youtube.videos().list(
             part='snippet,contentDetails',
@@ -314,6 +371,14 @@ def get_video_details(youtube, video_id):
         return None
 
 def get_videos_from_playlist(youtube, playlist_id):
+    """
+    Récupère toutes les vidéos d'une playlist YouTube avec leurs détails (titre, durée, sous-titres).
+    Args:
+        - youtube: objet API YouTube
+        - playlist_id: str, identifiant de la playlist
+    Returns:
+        - list: liste de dictionnaires contenant les informations des vidéos
+    """
     videos = []
     nextPageToken = None
     while True:
@@ -342,12 +407,28 @@ def get_videos_from_playlist(youtube, playlist_id):
     return videos
 
 def afficher_stats(videos):
+    """
+    Affiche les statistiques de téléchargement (succès/échecs) pour la liste de vidéos traitées.
+    Args:
+        - videos: list, liste de dictionnaires vidéo avec leur statut
+    Returns:
+        - None
+    """
     total = len(videos)
     success = sum(1 for v in videos if v.get('status') == 'success')
     failed = sum(1 for v in videos if v.get('status') == 'failed')
     print(f"Succès: {success}/{total} | Échecs: {failed}")
 
 def main():
+    """
+    Fonction principale orchestrant le scraping massif :
+    - Récupère les playlists à traiter
+    - Récupère les vidéos de chaque playlist
+    - Télécharge l'audio, gère l'upload MinIO et l'insertion MongoDB
+    - Affiche un résumé statistique final
+    Returns:
+        - None
+    """
     print("🚀 DÉBUT DU TÉLÉCHARGEMENT MASSIF YOUTUBE")
     start_time = time.time()
     youtube = build('youtube', 'v3', developerKey=API_KEY)

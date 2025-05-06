@@ -1,3 +1,19 @@
+"""
+Synchronisation Azure pour le projet Youtube-Fon-Scrapping.
+
+Ce module permet de :
+- Synchroniser tous les fichiers audio depuis MinIO vers Azure Blob Storage
+- Lister les blobs présents dans le conteneur Azure et obtenir des statistiques
+
+Variables d'environnement utilisées :
+- MINIO_ENDPOINT : Adresse du service MinIO
+- MINIO_ACCESS_KEY : Clé d'accès MinIO
+- MINIO_SECRET_KEY : Clé secrète MinIO
+- MINIO_BUCKET : Nom du bucket MinIO
+- AZURE_ACCOUNT_URL : URL du compte Azure Blob Storage
+- AZURE_SAS_TOKEN : Jeton SAS Azure
+- AZURE_CONTAINER : Nom du conteneur Azure
+"""
 import os
 import logging
 from datetime import datetime
@@ -33,7 +49,11 @@ AZURE_CONTAINER = os.getenv("AZURE_CONTAINER")
 
 def sync_to_azure():
     """
-    Synchronise tous les fichiers depuis MinIO vers Azure Blob Storage
+    Synchronise tous les fichiers depuis MinIO vers Azure Blob Storage.
+    Parcourt tous les objets du bucket MinIO, les télécharge puis les upload dans Azure Blob Storage.
+    Ajoute des métadonnées sur chaque blob transféré.
+    Returns:
+        None
     """
     try:
         # Clients init
@@ -83,7 +103,12 @@ def sync_to_azure():
 
 def list_azure_blobs(verbose=True):
     """
-    Liste tous les blobs présents dans le conteneur Azure
+    Liste tous les blobs présents dans le conteneur Azure.
+    Affiche le nom, la taille et la date de modification de chaque blob, ainsi que des statistiques globales.
+    Args:
+        verbose (bool): Affiche les détails si True.
+    Returns:
+        None
     """
     try:
         blob_service = BlobServiceClient(
@@ -101,18 +126,10 @@ def list_azure_blobs(verbose=True):
             total_count += 1
             total_size += blob.size
             if verbose:
-                logger.info(f"- {blob.name} ({blob.size} bytes)")
-                logger.info(f"  Dernière modification: {blob.last_modified}")
-                logger.info(f"  Métadonnées: {blob.metadata}")
-
-        total_size_gb = total_size / (1024 ** 3)
-        logger.info(f"\nRésumé statistique:")
-        logger.info(f"Nombre total d'objets: {total_count}")
-        logger.info(f"Taille totale occupée: {total_size_gb:.2f} Go")
-
+                logger.info(f"- {blob.name} | {blob.size/1024/1024:.2f} Mo | Modifié le {blob.last_modified}")
+        logger.info(f"Total blobs: {total_count} | Taille totale: {total_size/1024/1024:.2f} Mo")
     except Exception as e:
-        logger.error(f"Erreur lors du listing: {str(e)}")
-        raise
+        logger.error(f"Erreur lors de la liste des blobs Azure: {str(e)}")
 
 if __name__ == "__main__":
     import argparse
